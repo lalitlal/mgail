@@ -90,6 +90,8 @@ def main():
 
                 if done: 
                     # reset target here!
+                    # can randomly sample an action because the action at terminal state will be discarded anyway.
+                    append_data(buffer_data, new_obs, env.action_space.sample(), None, done, env.agent_pos, env.agent_dir, rew)
                     break
 
                 else:
