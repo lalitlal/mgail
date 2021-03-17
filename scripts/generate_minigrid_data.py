@@ -1,9 +1,7 @@
 from garage.experiment import Snapshotter
 import tensorflow as tf # optional, only for TensorFlow as we need a tf.Session
-from garage.sampler.utils import rollout
 
 import numpy as np
-import gzip
 import h5py
 import argparse
 
@@ -43,8 +41,7 @@ def npify(data):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--render', action='store_true', help='Render trajectories')
-    parser.add_argument('--random', action='store_true', help='Noisy actions')
-    parser.add_argument('--num_samples', type=int, default=int(1e5), help='Num samples to collect')
+    parser.add_argument('--num_episodes', type=int, default=int(1e5), help='Num episodes to collect')
     args = parser.parse_args()
 
 
@@ -56,37 +53,26 @@ def main():
         policy = data['algo'].policy
         env = data['env']
 
-        steps, max_steps = 0, 1500
-        obs = env.reset()  # The initial observation
-        policy.reset()
-        done = False
-        ts = 0
-
-        for _ in range(args.num_samples):
+        for n_s in range(args.num_episodes):
             obs = env.reset()  # The initial observation
             policy.reset()
             done = False
             rew = 0.0
-            ts = 0
-            if _ % 1000 == 0:
-                print('episode: ', _)
+            if n_s % 1000 == 0:
+                print('episode: ', n_s)
             
-            for _ in range(max_steps):
+            # max_step is preset inside the env, so done will be True to break the loop when
+            # either max_step is reached or goal achieved
+            while True:
                 if args.render:
                     env.render()  # Render the environment to see what's going on (optional)
 
                 act = policy.get_action(obs)
-
-                # if ts >= :
-                #     done = True # this forces us to have a terminal episode so it doesn't go on forever
                 
                 # act[0] is the actual action, while the second tuple is the done variable. Inspiration: 
                 # https://github.com/lcswillems/rl-starter-files/blob/3c7289765883ca681e586b51acf99df1351f8ead/utils/agent.py#L47
-                # print('shape of action:', act[0], 'dim 1', act[1])
-                # print('obs: ', obs['image'])
-                append_data(buffer_data, obs, act[0], _, done, _, env.agent_dir, rew) # obs is flattened from 7*7*2
+                append_data(buffer_data, obs, act[0], None, done, env.agent_pos, env.agent_dir, rew) # obs is flattened from 7*7*2
                 new_obs, rew, done, _ = env.step(act[0]) # why [0] ?
-                ts += 1
 
                 if done: 
                     # reset target here!
