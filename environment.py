@@ -74,14 +74,14 @@ class Environment(object):
         self.qvel_size = 1
 
     def _train_params(self):
-        self.trained_model = None
-        self.train_mode = True
+        self.trained_model = './snapshots/2021-03-17-01-09-007900.sn'
+        self.train_mode = False
         self.expert_data = 'expert_trajectories/minigrid4rooms_generated_115_augmented.hdf5'
-        self.n_train_iters = 10000
+        self.n_train_iters = 8000
         self.n_episodes_test = 1
         self.test_interval = 100
-        self.n_steps_test = 500 # WE NEED TO CHANGE THIS DURING AL 
-        self.vis_flag = False
+        self.n_steps_test = 100 # WE NEED TO CHANGE THIS DURING AL
+        self.vis_flag = True
         self.save_models = True
         self.config_dir = None
         self.continuous_actions = False
@@ -90,15 +90,15 @@ class Environment(object):
         self.er_agent_size = 1000
         self.prep_time = 1000
         self.collect_experience_interval = 15
-        self.n_steps_train = 10 # WE NEED TO CHANGE THIS DURING AL
-        self.discr_policy_itrvl = 100
-        self.gamma = 0.99
+        self.n_steps_train = 200 # WE NEED TO CHANGE THIS DURING AL # done
+        self.discr_policy_itrvl = 500                               # done
+        self.gamma = 0.80
         self.batch_size = 4000 # 70
         self.weight_decay = 1e-7
         self.policy_al_w = 1e-2
         self.policy_tr_w = 1e-4
-        self.policy_accum_steps = 7
-        self.total_trans_err_allowed = 1000
+        self.policy_accum_steps = 3                                 # done
+        self.total_trans_err_allowed = 100                          # done
         self.temp = 1.
         self.cost_sensitive_weight = 0.8
         self.noise_intensity = 6.
