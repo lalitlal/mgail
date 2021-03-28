@@ -85,8 +85,8 @@ class Driver(object):
         fetches = [alg.discriminator.minimize, alg.discriminator.loss, alg.discriminator.acc]
         
         if self.use_irl:
-            lprobs_a = np.log(action_a_probs) # placeholder -> modify this to extract er's action_probs
-            lprobs_e = np.log(action_e_probs) # placeholder -> modify this to extract er's action_probs
+            lprobs_a = action_a_probs # placeholder -> modify this to extract er's action_probs
+            lprobs_e = action_e_probs # placeholder -> modify this to extract er's action_probs
             lprobs = np.expand_dims(np.concatenate([lprobs_a, lprobs_e], axis=0), axis=1).astype(np.float32)
             
             feed_dict = {alg.states_: states, alg.actions: actions, alg.states: nstates,
@@ -149,10 +149,12 @@ class Driver(object):
             if not noise_flag:
                 do_keep_prob = 1.
             
-            a, a_probs = self.sess.run(fetches=[alg.action_test, alg.action_probs], feed_dict={alg.states: np.reshape(observation, [1, -1]),
+            a, a_means = self.sess.run(fetches=[alg.action_test, alg.action_means], feed_dict={alg.states: np.reshape(observation, [1, -1]),
                                                                     alg.do_keep_prob: do_keep_prob,
                                                                     alg.noise: noise_flag,
                                                                     alg.temp: self.env.temp})
+
+            a_probs = common.compute_action_probs(a, a_means[0], np.repeat(self.env.sigma, a.shape[0]))
 
             observation, reward, done, info = self.env.step(a, mode='python')
             # done = done or t > n_steps

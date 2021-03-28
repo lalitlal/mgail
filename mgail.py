@@ -131,11 +131,11 @@ class MGAIL(object):
             a = common.denormalize(mu, self.er_expert.actions_mean, self.er_expert.actions_std)
             eta = tf.random.normal(shape=tf.shape(a), stddev=self.env.sigma)
             self.action_test = tf.squeeze(a + self.noise * eta)
-            self.action_probs = mu
+            self.action_means = mu
         else:
             a = common.gumbel_softmax(logits=mu, temperature=self.temp)
             self.action_test = tf.compat.v1.argmax(a, dimension=1)
-            self.action_probs = mu
+            self.action_means = mu
 
         # 4.3 AL
         def policy_loop(state_, t, total_cost, total_trans_err, _):
@@ -144,14 +144,17 @@ class MGAIL(object):
             if self.env.continuous_actions:
                 eta = self.env.sigma * tf.random.normal(shape=tf.shape(mu))
                 action = mu + eta
+                # a_prob = common.compute_action_probs(action.numpy(), mu.numpy(), np.repeat(self.env.sigma, action.numpy().shape[0])
+                a_prob = 0.5
             else:
                 action = common.gumbel_softmax_sample(logits=mu, temperature=self.temp)
+                a_prob = 0.5
 
             # minimize the gap between agent logit (d[:,0]) and expert logit (d[:,1])
 
             # MODIFIED DISCRIMINATOR SECTION:
             if self.use_irl:
-                self.discrim_output, log_p_tau, log_q_tau, log_pq = self.discriminator.forward(state_, action, self.lprobs, reuse=True)
+                self.discrim_output, log_p_tau, log_q_tau, log_pq = self.discriminator.forward(state_, action, a_prob, reuse=True)
                 cost = self.al_loss(log_p=log_p_tau, log_q=log_q_tau, log_pq=log_pq)
             else:
                 d = self.discriminator.forward(state_, action, reuse=True)
