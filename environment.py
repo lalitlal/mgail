@@ -72,6 +72,7 @@ class Environment(object):
         self.continuous_actions = True
 
         # Main parameters to play with:
+        self.train_discriminator = True
         self.er_agent_size = 1000
         self.prep_time = 1000
         self.collect_experience_interval = 15
