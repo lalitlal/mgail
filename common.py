@@ -162,8 +162,8 @@ def gauss_log_pdf_tf(means, log_diag_stds, x):
     cov = tf.square(tf.exp(log_diag_stds))
     diff = x - means
     exp_term = -0.5 * tf.reduce_sum(tf.square(diff) / cov, axis=1)
-    norm_term = -0.5 * d * tf.log(2 * np.pi)
-    var_term = -0.5 * tf.reduce_sum(tf.log(cov), axis=1)
+    norm_term = -0.5 * d * tf.math.log(2 * np.pi)
+    var_term = -0.5 * tf.reduce_sum(tf.math.log(cov), axis=1)
     log_probs = norm_term + var_term + exp_term
     return log_probs
 
