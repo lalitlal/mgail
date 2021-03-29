@@ -130,12 +130,15 @@ class MGAIL(object):
         if self.env.continuous_actions:
             a = common.denormalize(mu, self.er_expert.actions_mean, self.er_expert.actions_std)
             eta = tf.random.normal(shape=tf.shape(a), stddev=self.env.sigma)
-            self.action_test = tf.squeeze(a + self.noise * eta)
-            self.action_means = mu
+            self.action_test = a + self.noise * eta
+            # self.action_means = mu
+            N = tf.shape(self.action_test)[0]
+            expanded_sigma= tf.repeat(tf.expand_dims(tf.cast(self.env.sigma, dtype=tf.float32), 0), N, axis=0)
+            self.action_probs_test = common.compute_action_probs_tf(self.action_test, mu, expanded_sigma)
         else:
             a = common.gumbel_softmax(logits=mu, temperature=self.temp)
             self.action_test = tf.compat.v1.argmax(a, dimension=1)
-            self.action_means = mu
+            self.action_means = tf.squeeze(mu)
 
         # 4.3 AL
         def policy_loop(state_, t, total_cost, total_trans_err, _):
@@ -144,8 +147,9 @@ class MGAIL(object):
             if self.env.continuous_actions:
                 eta = self.env.sigma * tf.random.normal(shape=tf.shape(mu))
                 action = mu + eta
-                # a_prob = common.compute_action_probs(action.numpy(), mu.numpy(), np.repeat(self.env.sigma, action.numpy().shape[0])
-                a_prob = 0.5
+                N = tf.shape(action)[0]
+                expanded_sigma= tf.repeat(tf.expand_dims(tf.cast(self.env.sigma, dtype=tf.float32), 0), N, axis=0)
+                a_prob = common.compute_action_probs_tf(action, mu, expanded_sigma)
             else:
                 action = common.gumbel_softmax_sample(logits=mu, temperature=self.temp)
                 a_prob = 0.5
