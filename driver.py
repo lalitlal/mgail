@@ -132,7 +132,7 @@ class Driver(object):
             observation = self.env.reset()
 
         else:
-            states, actions, rewards, posstates, terminals = alg.er_expert.sample()
+            states, actions, rewards, posstates, terminals, action_a_probs = alg.er_expert.sample()
             observation = states[0]
         
         do_keep_prob = self.env.do_keep_prob
