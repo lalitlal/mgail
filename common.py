@@ -145,6 +145,7 @@ def gumbel_softmax(logits, temperature, hard=True):
 
 def gauss_log_pdf(params, x):
     mean, log_diag_std = params
+    x = x.reshape(1, -1)
     mean = mean.reshape(1, -1)
     log_diag_std = log_diag_std.reshape(1, -1)
     N, d = mean.shape
@@ -154,7 +155,17 @@ def gauss_log_pdf(params, x):
     norm_term = -0.5*d*np.log(2*np.pi)
     var_term = -0.5 * np.sum(np.log(cov), axis=1)
     log_probs = norm_term + var_term + exp_term
-    return log_probs #sp.stats.multivariate_normal.logpdf(x, mean=mean, cov=cov)
+    return log_probs.squeeze() #sp.stats.multivariate_normal.logpdf(x, mean=mean, cov=cov)
+
+def gauss_log_pdf_tf(means, log_diag_stds, x):
+    d = tf.cast(tf.shape(means)[1], dtype=tf.float32)
+    cov = tf.square(tf.exp(log_diag_stds))
+    diff = x - means
+    exp_term = -0.5 * tf.reduce_sum(tf.square(diff) / cov, axis=1)
+    norm_term = -0.5 * d * tf.log(2 * np.pi)
+    var_term = -0.5 * tf.reduce_sum(tf.log(cov), axis=1)
+    log_probs = norm_term + var_term + exp_term
+    return log_probs
 
 def compute_action_probs(actions, means, stds):
     # returns probability of actions given policy distribution params
@@ -162,3 +173,8 @@ def compute_action_probs(actions, means, stds):
     params = list(zip(means, stds))
     path_probs = [gauss_log_pdf(params[i], actions[i]) for i in range(Npath)]
     return np.array(path_probs)
+
+def compute_action_probs_tf(actions, means, stds):
+    # returns probability of actions given policy distribution params
+    path_probs = gauss_log_pdf_tf(means, stds, actions)
+    return path_probs
