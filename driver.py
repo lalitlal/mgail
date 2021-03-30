@@ -188,13 +188,16 @@ class Driver(object):
         else:
             self.train_forward_model()
 
-            self.mode = 'Prep'
-            if self.itr < self.env.prep_time:
+            if self.env.train_discriminator:
+                self.mode = 'Prep'
+            else:
+                self.mode = "AL"            
+            if self.env.train_discriminator and self.itr < self.env.prep_time:
                 self.train_discriminator()
             else:
                 self.mode = 'AL'
 
-                if self.discriminator_policy_switch:
+                if self.env.train_discriminator and self.discriminator_policy_switch:
                     self.train_discriminator()
                 else:
                     self.train_policy()

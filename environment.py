@@ -59,7 +59,7 @@ class Environment(object):
         self.qvel_size = 6
 
     def _train_params(self):
-        self.trained_model = None
+        self.trained_model = 'snapshots/2021-03-29-13-37-009900.sn'
         self.train_mode = True
         self.expert_data = 'expert_trajectories/generated_antbullet_probs.hdf5'
         self.n_train_iters = 10000
@@ -72,6 +72,7 @@ class Environment(object):
         self.continuous_actions = True
 
         # Main parameters to play with:
+        self.train_discriminator = False
         self.er_agent_size = 1000
         self.prep_time = 1000
         self.collect_experience_interval = 15
