@@ -98,10 +98,10 @@ class MGAIL(object):
             self.discrim_output, log_p_tau, log_q_tau, log_pq = self.discriminator.forward(states_, actions, states, lprobs)
 
 
-            correct_predictions = tf.equal(tf.round(self.discrim_output), tf.argmax(labels, 1))
+            correct_predictions = tf.equal(tf.cast(tf.round(self.discrim_output), tf.int64), tf.argmax(labels, 1))
             self.discriminator.acc = tf.reduce_mean(tf.cast(correct_predictions, "float"))
 
-            d_cross_entropy = labels*(log_p_tau-log_pq) + (1-labels)*(log_q_tau-log_pq)
+            d_cross_entropy = self.label*(log_p_tau-log_pq) + (1-self.label)*(log_q_tau-log_pq)
 
             d_loss_weighted = self.env.cost_sensitive_weight * tf.multiply(tf.compat.v1.to_float(tf.equal(tf.squeeze(self.label), 1.)), d_cross_entropy) +\
                                                             tf.multiply(tf.compat.v1.to_float(tf.equal(tf.squeeze(self.label), 0.)), d_cross_entropy)
@@ -154,21 +154,6 @@ class MGAIL(object):
                 action = common.gumbel_softmax_sample(logits=mu, temperature=self.temp)
                 a_prob = 0.5
 
-            # minimize the gap between agent logit (d[:,0]) and expert logit (d[:,1])
-
-            # MODIFIED DISCRIMINATOR SECTION:
-            if self.use_irl:
-                self.discrim_output, log_p_tau, log_q_tau, log_pq = self.discriminator.forward(state_, action, a_prob, reuse=True)
-                cost = self.al_loss(log_p=log_p_tau, log_q=log_q_tau, log_pq=log_pq)
-            else:
-                d = self.discriminator.forward(state_, action, reuse=True)
-                cost = self.al_loss(d=d)
-
-            # END MODIFIED DISCRIMINATOR SECTION
-
-            # add step cost
-            total_cost += tf.multiply(tf.pow(self.gamma, t), cost)
-
             # get action
             if self.env.continuous_actions:
                 a_sim = common.denormalize(action, self.er_expert.actions_mean, self.er_expert.actions_std)
@@ -185,6 +170,21 @@ class MGAIL(object):
             state, nu = common.re_parametrization(state_e=state_e, state_a=state_a)
             total_trans_err += tf.reduce_mean(abs(nu))
             t += 1
+
+            # minimize the gap between agent logit (d[:,0]) and expert logit (d[:,1])
+
+            # MODIFIED DISCRIMINATOR SECTION:
+            if self.use_irl:
+                self.discrim_output, log_p_tau, log_q_tau, log_pq = self.discriminator.forward(state_, action, state, a_prob, reuse=True)
+                cost = self.al_loss(log_p=log_p_tau, log_q=log_q_tau, log_pq=log_pq)
+            else:
+                d = self.discriminator.forward(state_, action, reuse=True)
+                cost = self.al_loss(d=d)
+
+            # END MODIFIED DISCRIMINATOR SECTION
+
+            # add step cost
+            total_cost += tf.multiply(tf.pow(self.gamma, t), cost)
 
             return state, t, total_cost, total_trans_err, env_term_sig
 

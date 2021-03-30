@@ -7,7 +7,7 @@ class ER(object):
     def __init__(self, memory_size, state_dim, action_dim, batch_size, history_length=1):
         self.memory_size = memory_size
         self.actions = np.random.normal(scale=0.35, size=(self.memory_size, action_dim))
-        self.action_probs = np.random.normal(scale=0.35, size=(self.memory_size, action_dim))
+        self.action_probs = np.random.normal(scale=0.35, size=(self.memory_size, 1))
         self.rewards = np.random.normal(scale=0.35, size=(self.memory_size, ))
         self.states = np.random.normal(scale=0.35, size=(self.memory_size, state_dim))
         self.terminals = np.zeros(self.memory_size, dtype=np.float32)

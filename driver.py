@@ -87,11 +87,11 @@ class Driver(object):
         if self.use_irl:
             lprobs_a = action_a_probs # placeholder -> modify this to extract er's action_probs
             lprobs_e = action_e_probs # placeholder -> modify this to extract er's action_probs
-            lprobs = np.expand_dims(np.concatenate([lprobs_a, lprobs_e], axis=0), axis=1).astype(np.float32)
+            lprobs = np.concatenate([lprobs_a, lprobs_e], axis=0).astype(np.float32)
             
             feed_dict = {alg.states_: states, alg.actions: actions, alg.states: nstates,
                         alg.label: labels, alg.do_keep_prob: self.env.do_keep_prob,
-                        alg.lprobs: lprobs}
+                        alg.lprobs: lprobs, alg.gamma: self.env.gamma}
         else:
             feed_dict = {alg.states: states, alg.actions: actions,
                         alg.label: labels, alg.do_keep_prob: self.env.do_keep_prob}
