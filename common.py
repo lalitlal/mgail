@@ -155,7 +155,7 @@ def gauss_log_pdf(params, x):
     norm_term = -0.5*d*np.log(2*np.pi)
     var_term = -0.5 * np.sum(np.log(cov), axis=1)
     log_probs = norm_term + var_term + exp_term
-    return log_probs.squeeze() #sp.stats.multivariate_normal.logpdf(x, mean=mean, cov=cov)
+    return log_probs #sp.stats.multivariate_normal.logpdf(x, mean=mean, cov=cov)
 
 def gauss_log_pdf_tf(means, log_diag_stds, x):
     d = tf.cast(tf.shape(means)[1], dtype=tf.float32)
@@ -165,7 +165,7 @@ def gauss_log_pdf_tf(means, log_diag_stds, x):
     norm_term = -0.5 * d * tf.math.log(2 * np.pi)
     var_term = -0.5 * tf.reduce_sum(tf.math.log(cov), axis=1)
     log_probs = norm_term + var_term + exp_term
-    return log_probs
+    return tf.reshape(log_probs, [-1, 1])
 
 def compute_action_probs(actions, means, stds):
     # returns probability of actions given policy distribution params

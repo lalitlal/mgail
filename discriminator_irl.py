@@ -37,7 +37,7 @@ class DiscriminatorIRL(object):
             with tf.variable_scope('reward'): # hidden layers in AIRL code is 32, 32
                 h0_rew = ops.dense(rew_input, rew_in_dim, self.arch_params['n_hidden_0'], tf.nn.relu, 'dense0_rew', reuse)
                 h1_rew = ops.dense(h0_rew, self.arch_params['n_hidden_0'], self.arch_params['n_hidden_1'], tf.nn.relu, 'dense1_rew', reuse)
-                relu1_do_rew = tf.nn.dropout(h1, self.arch_params['do_keep_prob'])
+                relu1_do_rew = tf.nn.dropout(h1_rew, self.arch_params['do_keep_prob'])
                 self.reward = ops.dense(relu1_do_rew, self.arch_params['n_hidden_1'], self.arch_params['out_dim'], None, 'dense2_rew', reuse)
             # END REWARD FN:
 
