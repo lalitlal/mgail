@@ -12,16 +12,19 @@ def plotLoss(losses):
     plt.xlabel('Epochs')
     plt.ylabel('Loss')
 
-def plotReward(rewards):
+def plotReward(rewards, stds=None):
     plt.figure()
     plt.plot(rewards)
+    if stds != None and len(stds) > 0:
+        plt.errorbar(list(range(len(rewards))), rewards, yerr=stds, ecolor='r')
     plt.xlabel('Epochs')
     plt.ylabel('Avg Reward')
 
-def dispatcher(env, use_irl):
+def dispatcher(env, use_irl, env_name='Hopper'):
 
     driver = Driver(env, use_irl)
     avg_rewards = []
+    reward_stds = []
     if env.vis_flag:
         env.render()
 
@@ -43,6 +46,7 @@ def dispatcher(env, use_irl):
             driver.reward_mean = sum(R) / len(R)
             driver.reward_std = np.std(R)
             avg_rewards.append(driver.reward_mean)
+            reward_stds.append(driver.reward_std)
 
             # print info line
             driver.print_info_line('full')
@@ -59,13 +63,14 @@ def dispatcher(env, use_irl):
     plt.title("Discriminator Loss")
     plotLoss(driver.forward_losses)
     plt.title("Forward Model Loss")
-    plotReward(avg_rewards)
-    plt.title("Hopper Average Rewards")
+    plotReward(avg_rewards, reward_stds)
+    plt.title(env_name + " Average Rewards")
     plt.show()
 
 if __name__ == '__main__':
     # load environment
-    env = Environment(os.path.curdir, 'AntPyBulletEnv-v0')
-    use_irl = False
+    env_name = 'Hopper' # options: Hopper, Ant, ...
+    env = Environment(os.path.curdir, env_name + 'PyBulletEnv-v0')
+    use_irl = True
     # start training
-    dispatcher(env=env, use_irl=use_irl)
+    dispatcher(env=env, use_irl=use_irl, env_name=env_name)
