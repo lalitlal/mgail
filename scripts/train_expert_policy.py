@@ -6,28 +6,12 @@ from garage.envs import GarageEnv
 from garage.experiment import LocalTFRunner
 from garage.experiment.deterministic import set_seed
 from garage.np.baselines import LinearFeatureBaseline
+from garage.tf.baselines import GaussianCNNBaseline, GaussianMLPBaseline
 from garage.tf.algos import TRPO
 from garage.tf.policies import CategoricalMLPPolicy, GaussianMLPPolicy
 import pybulletgym
 
 from akro.discrete import Discrete
-
-# These wrappers are inspired by https://github.com/maximecb/gym-minigrid/blob/master/gym_minigrid/wrappers.py
-class OnlyPartialObjAndColor(gym.core.ObservationWrapper):
-    def __init__(self, env):
-        super().__init__(env)
-
-        self.observation_space = spaces.Box(
-            low=0,
-            high=255,
-            shape=(7 * 7 * 2,),
-            dtype='uint8'
-        )
-
-    def observation(self, obs):
-        return np.delete(obs["image"], 2, axis=2).flatten()
-
-MAX_STEPS = 19 ** 2 * 2
 
 @wrap_experiment
 def trpo_minigrid(ctxt=None, seed=1):
@@ -41,14 +25,17 @@ def trpo_minigrid(ctxt=None, seed=1):
     set_seed(seed)
     with LocalTFRunner(ctxt) as runner:
 
-        env = GarageEnv(env_name='HopperMuJoCoEnv-v0')
+        env = GarageEnv(env_name='DisabledAntPyBulletEnv-v0')
 
         policy = GaussianMLPPolicy(name='policy',
 
                                       env_spec=env.spec,
                                       hidden_sizes=(128, 64, 32))
 
-        baseline = LinearFeatureBaseline(env_spec=env.spec)
+        # baseline = LinearFeatureBaseline(env_spec=env.spec)
+        baseline = GaussianMLPBaseline(
+            env_spec=env.spec
+        )
 
         algo = TRPO(env_spec=env.spec,
                     policy=policy,
@@ -58,7 +45,7 @@ def trpo_minigrid(ctxt=None, seed=1):
                     max_kl_step=0.001)
 
         runner.setup(algo, env)
-        runner.train(n_epochs=100, batch_size=4000)
+        runner.train(n_epochs=2000, batch_size=4000)
 
 
 

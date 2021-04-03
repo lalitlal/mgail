@@ -156,7 +156,7 @@ class Driver(object):
             # a_probs = common.compute_action_probs(a, a_means, self.env.sigma.reshape(1, -1))
 
             observation, reward, done, info = self.env.step(a, mode='python')
-            # done = done or t > n_steps
+            done = done or t > n_steps
             t += 1
             R += reward
 

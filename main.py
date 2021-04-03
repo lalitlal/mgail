@@ -15,8 +15,8 @@ def plotLoss(losses):
 def plotReward(rewards, stds=None):
     plt.figure()
     plt.plot(rewards)
-    if stds != None and len(stds) > 0:
-        plt.errorbar(list(range(len(rewards))), rewards, yerr=stds, ecolor='r')
+    # if stds != None and len(stds) > 0:
+    #     plt.errorbar(list(range(len(rewards))), rewards, yerr=stds, ecolor='r')
     plt.xlabel('Epochs')
     plt.ylabel('Avg Reward')
 
@@ -57,6 +57,7 @@ def dispatcher(env, use_irl, env_name='Hopper'):
 
         driver.itr += 1
 
+    print('Top 3 Max Avg Rewards: ', np.sort(avg_rewards)[-3:])
     plotLoss(driver.policy_losses)
     plt.title("Policy Loss")
     plotLoss(driver.disc_losses)

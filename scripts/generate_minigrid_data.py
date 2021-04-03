@@ -9,7 +9,7 @@ import argparse
 
 
 
-MODEL_PATH = "data/local/experiment/antbullet/"
+MODEL_PATH = "data/local/experiment/hopperbullet/"
 
 # MAIN IDEAS: 
 # 1. https://github.com/rlworkgroup/garage/blob/c43eaf7647f7feb467847cb8bc107301a7c31938/docs/user/reuse_garage_policy.md
@@ -56,13 +56,14 @@ def main():
         policy = data['algo'].policy
         env = data['env']
 
-        steps, max_steps = 0, 1500
+        steps, max_steps = 0, 1000
         if args.render:
             env.render()
         obs = env.reset()  # The initial observation
         policy.reset()
         done = False
         ts = 0
+        rews = []
 
         for _ in range(args.num_samples):
             obs = env.reset()  # The initial observation
@@ -70,6 +71,7 @@ def main():
             done = False
             rew = 0.0
             ts = 0
+            tot_rew = 0
             # if _ % 1000 == 0:
             print('episode: ', _)
             
@@ -85,6 +87,7 @@ def main():
                 append_data(buffer_data, obs, act, prob, done, rew)
                 new_obs, rew, done, _ = env.step(act) # why [0] ?
                 ts += 1
+                tot_rew += rew
 
                 if done: 
                     # reset target here!
@@ -96,8 +99,11 @@ def main():
                 else:
                     # continue by setting current obs
                     obs = new_obs
+        
+            rews.append(tot_rew)
 
-        fname = 'generated_antbullet_probs.hdf5'
+        print('Avg Rew: ', np.mean(rews))
+        fname = 'generated_hopper_probs.hdf5'
         dataset = h5py.File(fname, 'w')
         npify(buffer_data)
         for key in buffer_data:
@@ -107,7 +113,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
