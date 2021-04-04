@@ -54,11 +54,9 @@ def dispatcher(env, use_irl, env_name='Hopper'):
 
             # save snapshot
             if env.train_mode and env.save_models:
-                driver.save_model(dir_name=env.config_dir)
-            
-            if driver.reward_mean > best_reward:
-                driver.save_model(dir_name=env.config_dir, best=True, prefix=env_name)
-                best_reward = driver.reward_mean
+                if driver.reward_mean > best_reward:
+                    driver.save_model(dir_name=env.config_dir, best=True, prefix=env_name)
+                    best_reward = driver.reward_mean
 
 
         driver.itr += 1
