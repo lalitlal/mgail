@@ -230,6 +230,6 @@ class Driver(object):
         if not best:
             fname = dir_name + time.strftime("%Y-%m-%d-%H-%M-") + ('%0.6d.sn' % self.itr)
         else:
-            fname = dir_name + prefix + '-best'
+            fname = dir_name + 'best/' + prefix + '-best'
 
         common.save_params(fname=fname, saver=self.saver, session=self.sess)
