@@ -221,11 +221,15 @@ class Driver(object):
             buf = "processing iter: %d, loss(forward_model,discriminator,policy): %s" % (self.itr, self.loss)
         sys.stdout.write('\r' + buf)
 
-    def save_model(self, dir_name=None):
+    def save_model(self, dir_name=None, best=False, prefix=None):
         import os
         if dir_name is None:
             dir_name = self.run_dir + '/snapshots/'
         if not os.path.isdir(dir_name):
             os.mkdir(dir_name)
-        fname = dir_name + time.strftime("%Y-%m-%d-%H-%M-") + ('%0.6d.sn' % self.itr)
+        if not best:
+            fname = dir_name + time.strftime("%Y-%m-%d-%H-%M-") + ('%0.6d.sn' % self.itr)
+        else:
+            fname = dir_name + prefix + '-best'
+
         common.save_params(fname=fname, saver=self.saver, session=self.sess)
