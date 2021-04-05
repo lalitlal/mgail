@@ -61,8 +61,8 @@ class Environment(object):
     def _train_params(self):
         self.trained_model = None
         self.train_mode = True
-        self.expert_data = 'expert_trajectories/generated_hopperbullet_probs.hdf5'
-        self.n_train_iters = 10000
+        self.expert_data = 'expert_trajectories/generated_ant_probs.hdf5'
+        self.n_train_iters = 100000
         self.n_episodes_test = 5
         self.test_interval = 100
         self.n_steps_test = 500
@@ -91,7 +91,7 @@ class Environment(object):
         self.do_keep_prob = 0.75
 
         # Hidden layers size
-        self.fm_size = 100
+        self.fm_size = 200
         self.d_size = [200, 100]
         self.p_size = [100, 50]
 

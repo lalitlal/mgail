@@ -74,7 +74,7 @@ def dispatcher(env, use_irl, env_name='Hopper'):
 
 if __name__ == '__main__':
     # load environment
-    env_name = 'Hopper' # options: Hopper, Ant, ...
+    env_name = 'Ant' # options: Hopper, Ant, ...
     env = Environment(os.path.curdir, env_name + 'PyBulletEnv-v0')
     use_irl = True
     # start training
