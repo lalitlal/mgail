@@ -3,7 +3,7 @@ import tensorflow as tf
 import pybulletgym
 import numpy as np
 
-MODEL_PATH = "data/local/experiment/trpo_minigrid_13/"
+MODEL_PATH = "data/local/experiment/antbullet/"
 
 def main():
     snapshotter = Snapshotter()
@@ -14,7 +14,7 @@ def main():
         policy = data['algo'].policy
         env = data['env']
 
-        steps, max_steps = 0, 1500
+        steps, max_steps = 0, 1000
         done = False
         env.render()
         obs = env.reset()  # The initial observation

@@ -9,7 +9,7 @@ import argparse
 
 
 
-MODEL_PATH = "data/local/experiment/trpo_minigrid_14/"
+MODEL_PATH = "data/local/experiment/hopperbullet/"
 
 # MAIN IDEAS: 
 # 1. https://github.com/rlworkgroup/garage/blob/c43eaf7647f7feb467847cb8bc107301a7c31938/docs/user/reuse_garage_policy.md
@@ -20,19 +20,17 @@ def reset_data():
             'actions': [],
             'terminals': [],
             'rewards': [],
-            'infos/goal': [],
-            'infos/pos': [],
-            'infos/orientation': [],
+            'a_info/mean': [],
+            'a_info/log_std': [],
             }
 
-def append_data(data, s, a, tgt, done, pos, ori, rew):
+def append_data(data, s, a, a_info, done, rew):
     data['observations'].append(s)
     data['actions'].append(a)
     data['rewards'].append(rew)
     data['terminals'].append(done)
-    data['infos/goal'].append(tgt)
-    data['infos/pos'].append(pos)
-    data['infos/orientation'].append(ori)
+    data['a_info/mean'].append(a_info['mean'])
+    data['a_info/log_std'].append(a_info['log_std'])
 
 def npify(data):
     for k in data:
@@ -58,13 +56,14 @@ def main():
         policy = data['algo'].policy
         env = data['env']
 
-        steps, max_steps = 0, 1500
+        steps, max_steps = 0, 1000
         if args.render:
             env.render()
         obs = env.reset()  # The initial observation
         policy.reset()
         done = False
         ts = 0
+        rews = []
 
         for _ in range(args.num_samples):
             obs = env.reset()  # The initial observation
@@ -72,36 +71,39 @@ def main():
             done = False
             rew = 0.0
             ts = 0
-            if _ % 1000 == 0:
-                print('episode: ', _)
+            tot_rew = 0
+            # if _ % 1000 == 0:
+            print('episode: ', _)
             
             for _ in range(max_steps):
                 if args.render:
-                    env.render()  # Render the environment to see what's going on (optional)
+                    env.render()
 
-                act = policy.get_action(obs)
-
-                # if ts >= :
-                #     done = True # this forces us to have a terminal episode so it doesn't go on forever
+                act, prob = policy.get_action(obs)
                 
                 # act[0] is the actual action, while the second tuple is the done variable. Inspiration: 
                 # https://github.com/lcswillems/rl-starter-files/blob/3c7289765883ca681e586b51acf99df1351f8ead/utils/agent.py#L47
-                # print('shape of action:', act[0], 'dim 1', act[1])
-                append_data(buffer_data, obs, act[0], _, done, _, _, rew) # obs is flattened from 7*7*2
-                new_obs, rew, done, _ = env.step(act[0]) # why [0] ?
+
+                append_data(buffer_data, obs, act, prob, done, rew)
+                new_obs, rew, done, _ = env.step(act) # why [0] ?
                 ts += 1
+                tot_rew += rew
 
                 if done: 
                     # reset target here!
                     random_act = env.action_space.sample()
-                    append_data(buffer_data, new_obs, random_act, 0, done, 0, 0, rew)
+                    infos = {'mean': np.random.rand(env.action_space.shape[0]), 'log_std': np.random.rand(env.action_space.shape[0])} # random action info
+                    append_data(buffer_data, new_obs, random_act, infos , done, rew)
                     break
 
                 else:
                     # continue by setting current obs
                     obs = new_obs
+        
+            rews.append(tot_rew)
 
-        fname = 'generated_hopper.hdf5'
+        print('Avg Rew: ', np.mean(rews))
+        fname = 'generated_hopper_probs.hdf5'
         dataset = h5py.File(fname, 'w')
         npify(buffer_data)
         for key in buffer_data:
@@ -111,7 +113,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-

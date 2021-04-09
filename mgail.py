@@ -7,11 +7,12 @@ from ER import ER
 from forward_model import ForwardModel
 from discriminator import Discriminator
 from policy import Policy
+from discriminator_irl import DiscriminatorIRL
 
 
 class MGAIL(object):
-    def __init__(self, environment):
-
+    def __init__(self, environment, use_irl=False):
+        self.use_irl = use_irl
         self.env = environment
 
         # Create placeholders for all the inputs
@@ -23,19 +24,34 @@ class MGAIL(object):
         self.temp = tf.compat.v1.placeholder("float", shape=(), name='temperature')
         self.noise = tf.compat.v1.placeholder("float", shape=(), name='noise_flag')
         self.do_keep_prob = tf.compat.v1.placeholder("float", shape=(), name='do_keep_prob')
+        self.lprobs = tf.compat.v1.placeholder('float', shape=(None, 1), name='log_probs')
 
         # Create MGAIL blocks
         self.forward_model = ForwardModel(state_size=self.env.state_size,
                                           action_size=self.env.action_size,
                                           encoding_size=self.env.fm_size,
                                           lr=self.env.fm_lr)
-
-        self.discriminator = Discriminator(in_dim=self.env.state_size + self.env.action_size,
-                                           out_dim=2,
-                                           size=self.env.d_size,
-                                           lr=self.env.d_lr,
-                                           do_keep_prob=self.do_keep_prob,
-                                           weight_decay=self.env.weight_decay)
+        
+        # MODIFYING THE NEW DISCRIMINATOR:
+        if self.use_irl:
+            self.discriminator = DiscriminatorIRL(in_dim=self.env.state_size + self.env.action_size,
+                                            out_dim=1,
+                                            size=self.env.d_size,
+                                            lr=self.env.d_lr,
+                                            do_keep_prob=self.do_keep_prob,
+                                            weight_decay=self.env.weight_decay,
+                                            state_only=True,
+                                            gamma=self.gamma,
+                                            state_size = self.env.state_size,
+                                            action_size = self.env.action_size)
+        # END MODIFYING THE NEW DISCRIMINATOR
+        else:
+            self.discriminator = Discriminator(in_dim=self.env.state_size + self.env.action_size,
+                                            out_dim=2,
+                                            size=self.env.d_size,
+                                            lr=self.env.d_lr,
+                                            do_keep_prob=self.do_keep_prob,
+                                            weight_decay=self.env.weight_decay)
 
         self.policy = Policy(in_dim=self.env.state_size,
                               out_dim=self.env.action_size,
@@ -75,28 +91,54 @@ class MGAIL(object):
 
         # 2. Discriminator
         labels = tf.concat([1 - self.label, self.label], 1)
-        d = self.discriminator.forward(states, actions)
+        lprobs = self.lprobs
+        
+        # MODIFIED DISCRIMINATOR SECTION
+        if self.use_irl:
+            self.discrim_output, log_p_tau, log_q_tau, log_pq = self.discriminator.forward(states_, actions, states, lprobs)
 
-        # 2.1 0-1 accuracy
-        correct_predictions = tf.equal(tf.argmax(d, 1), tf.argmax(labels, 1))
-        self.discriminator.acc = tf.reduce_mean(tf.cast(correct_predictions, "float"))
-        # 2.2 prediction
-        d_cross_entropy = tf.nn.softmax_cross_entropy_with_logits(logits=d, labels=labels)
-        # cost sensitive weighting (weight true=expert, predict=agent mistakes)
-        d_loss_weighted = self.env.cost_sensitive_weight * tf.multiply(tf.compat.v1.to_float(tf.equal(tf.squeeze(self.label), 1.)), d_cross_entropy) +\
-                                                           tf.multiply(tf.compat.v1.to_float(tf.equal(tf.squeeze(self.label), 0.)), d_cross_entropy)
-        discriminator_loss = tf.reduce_mean(d_loss_weighted)
-        self.discriminator.train(objective=discriminator_loss)
+
+            correct_predictions = tf.equal(tf.cast(tf.round(self.discrim_output), tf.int64), tf.argmax(labels, 1))
+            self.discriminator.acc = tf.reduce_mean(tf.cast(correct_predictions, "float"))
+
+            d_cross_entropy = self.label*(log_p_tau-log_pq) + (1-self.label)*(log_q_tau-log_pq)
+
+            d_loss_weighted = self.env.cost_sensitive_weight * tf.multiply(tf.compat.v1.to_float(tf.equal(tf.squeeze(self.label), 1.)), d_cross_entropy) +\
+                                                            tf.multiply(tf.compat.v1.to_float(tf.equal(tf.squeeze(self.label), 0.)), d_cross_entropy)
+            
+            discriminator_loss = -tf.reduce_mean(d_loss_weighted)
+            self.discriminator.train(objective=discriminator_loss)
+        # END MODIFIED DISCRIMINATOR SECTION
+
+
+        else:
+            d = self.discriminator.forward(states, actions)
+            # 2.1 0-1 accuracy
+            correct_predictions = tf.equal(tf.argmax(d, 1), tf.argmax(labels, 1))
+            self.discriminator.acc = tf.reduce_mean(tf.cast(correct_predictions, "float"))
+            # 2.2 prediction
+            d_cross_entropy = tf.nn.softmax_cross_entropy_with_logits(logits=d, labels=labels)
+            # cost sensitive weighting (weight true=expert, predict=agent mistakes)
+            d_loss_weighted = self.env.cost_sensitive_weight * tf.multiply(tf.compat.v1.to_float(tf.equal(tf.squeeze(self.label), 1.)), d_cross_entropy) +\
+                                                            tf.multiply(tf.compat.v1.to_float(tf.equal(tf.squeeze(self.label), 0.)), d_cross_entropy)
+        
+            discriminator_loss = tf.reduce_mean(d_loss_weighted)
+            self.discriminator.train(objective=discriminator_loss)
 
         # 3. Collect experience
         mu = self.policy.forward(states)
         if self.env.continuous_actions:
             a = common.denormalize(mu, self.er_expert.actions_mean, self.er_expert.actions_std)
             eta = tf.random.normal(shape=tf.shape(a), stddev=self.env.sigma)
-            self.action_test = tf.squeeze(a + self.noise * eta)
+            self.action_test = a + self.noise * eta
+            # self.action_means = mu
+            N = tf.shape(self.action_test)[0]
+            expanded_sigma= tf.repeat(tf.expand_dims(tf.cast(self.env.sigma, dtype=tf.float32), 0), N, axis=0)
+            self.action_probs_test = common.compute_action_probs_tf(self.action_test, mu, expanded_sigma)
         else:
             a = common.gumbel_softmax(logits=mu, temperature=self.temp)
             self.action_test = tf.compat.v1.argmax(a, dimension=1)
+            self.action_means = tf.squeeze(mu)
 
         # 4.3 AL
         def policy_loop(state_, t, total_cost, total_trans_err, _):
@@ -105,15 +147,12 @@ class MGAIL(object):
             if self.env.continuous_actions:
                 eta = self.env.sigma * tf.random.normal(shape=tf.shape(mu))
                 action = mu + eta
+                N = tf.shape(action)[0]
+                expanded_sigma= tf.repeat(tf.expand_dims(tf.cast(self.env.sigma, dtype=tf.float32), 0), N, axis=0)
+                a_prob = common.compute_action_probs_tf(action, mu, expanded_sigma)
             else:
                 action = common.gumbel_softmax_sample(logits=mu, temperature=self.temp)
-
-            # minimize the gap between agent logit (d[:,0]) and expert logit (d[:,1])
-            d = self.discriminator.forward(state_, action, reuse=True)
-            cost = self.al_loss(d)
-
-            # add step cost
-            total_cost += tf.multiply(tf.pow(self.gamma, t), cost)
+                a_prob = 0.5
 
             # get action
             if self.env.continuous_actions:
@@ -132,6 +171,21 @@ class MGAIL(object):
             total_trans_err += tf.reduce_mean(abs(nu))
             t += 1
 
+            # minimize the gap between agent logit (d[:,0]) and expert logit (d[:,1])
+
+            # MODIFIED DISCRIMINATOR SECTION:
+            if self.use_irl:
+                self.discrim_output, log_p_tau, log_q_tau, log_pq = self.discriminator.forward(state_, action, state, a_prob, reuse=True)
+                cost = self.al_loss(log_p=log_p_tau, log_q=log_q_tau, log_pq=log_pq)
+            else:
+                d = self.discriminator.forward(state_, action, reuse=True)
+                cost = self.al_loss(d=d)
+
+            # END MODIFIED DISCRIMINATOR SECTION
+
+            # add step cost
+            total_cost += tf.multiply(tf.pow(self.gamma, t), cost)
+
             return state, t, total_cost, total_trans_err, env_term_sig
 
         def policy_stop_condition(state_, t, cost, trans_err, env_term_sig):
@@ -144,12 +198,14 @@ class MGAIL(object):
         loop_outputs = tf.while_loop(policy_stop_condition, policy_loop, [state_0, 0., 0., 0., False])
         self.policy.train(objective=loop_outputs[2])
 
-    def al_loss(self, d):
-        logit_agent, logit_expert = tf.split(axis=1, num_or_size_splits=2, value=d)
+    def al_loss(self, d=None, log_p=None, log_q=None, log_pq=None):
+        if not self.use_irl:
+            logit_agent, logit_expert = tf.split(axis=1, num_or_size_splits=2, value=d)
+            labels = tf.concat([tf.zeros_like(logit_agent), tf.ones_like(logit_expert)], 1)
+            d_cross_entropy = tf.nn.softmax_cross_entropy_with_logits(logits=d, labels=labels)
+        
+        else: # USING IRL
+            d_cross_entropy = - (log_p - log_pq) + (log_q - log_pq)
 
-        # Cross entropy loss
-        labels = tf.concat([tf.zeros_like(logit_agent), tf.ones_like(logit_expert)], 1)
-        d_cross_entropy = tf.nn.softmax_cross_entropy_with_logits(logits=d, labels=labels)
         loss = tf.reduce_mean(d_cross_entropy)
-
         return loss*self.env.policy_al_w

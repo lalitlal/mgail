@@ -7,10 +7,10 @@ from mgail import MGAIL
 
 
 class Driver(object):
-    def __init__(self, environment):
-
+    def __init__(self, environment, use_irl=False):
+        self.use_irl = use_irl
         self.env = environment
-        self.algorithm = MGAIL(environment=self.env)
+        self.algorithm = MGAIL(environment=self.env, use_irl=use_irl)
         self.init_graph = tf.compat.v1.global_variables_initializer()
         self.saver = tf.compat.v1.train.Saver()
         self.sess = tf.compat.v1.Session()
@@ -67,17 +67,35 @@ class Driver(object):
     def train_discriminator(self):
         alg = self.algorithm
         # get states and actions
-        state_a_, action_a = self.algorithm.er_agent.sample()[:2]
-        state_e_, action_e = self.algorithm.er_expert.sample()[:2]
+        if self.use_irl:
+            state_a_, action_a, _, n_state_a, _, action_a_probs = self.algorithm.er_agent.sample()
+            state_e_, action_e, _, n_state_e, _, action_e_probs = self.algorithm.er_expert.sample()
+        else:
+            state_a_, action_a, _, n_state_a, = self.algorithm.er_agent.sample()[:4]
+            state_e_, action_e, _, n_state_e, = self.algorithm.er_expert.sample()[:4]
+
         states = np.concatenate([state_a_, state_e_])
         actions = np.concatenate([action_a, action_e])
+        nstates = np.concatenate([n_state_a, n_state_e])
         # labels (policy/expert) : 0/1, and in 1-hot form: policy-[1,0], expert-[0,1]
         labels_a = np.zeros(shape=(state_a_.shape[0],))
         labels_e = np.ones(shape=(state_e_.shape[0],))
         labels = np.expand_dims(np.concatenate([labels_a, labels_e]), axis=1)
+
         fetches = [alg.discriminator.minimize, alg.discriminator.loss, alg.discriminator.acc]
-        feed_dict = {alg.states: states, alg.actions: actions,
-                     alg.label: labels, alg.do_keep_prob: self.env.do_keep_prob}
+        
+        if self.use_irl:
+            lprobs_a = action_a_probs # placeholder -> modify this to extract er's action_probs
+            lprobs_e = action_e_probs # placeholder -> modify this to extract er's action_probs
+            lprobs = np.concatenate([lprobs_a, lprobs_e], axis=0).astype(np.float32)
+            
+            feed_dict = {alg.states_: states, alg.actions: actions, alg.states: nstates,
+                        alg.label: labels, alg.do_keep_prob: self.env.do_keep_prob,
+                        alg.lprobs: lprobs, alg.gamma: self.env.gamma}
+        else:
+            feed_dict = {alg.states: states, alg.actions: actions,
+                        alg.label: labels, alg.do_keep_prob: self.env.do_keep_prob}
+
         run_vals = self.sess.run(fetches, feed_dict)
         self.update_stats('discriminator', 'loss', run_vals[1])
         self.update_stats('discriminator', 'accuracy', run_vals[2])
@@ -114,7 +132,7 @@ class Driver(object):
             observation = self.env.reset()
 
         else:
-            states, actions, rewards, posstates, terminals = alg.er_expert.sample()
+            states, actions, rewards, posstates, terminals, action_a_probs = alg.er_expert.sample()
             observation = states[0]
         
         do_keep_prob = self.env.do_keep_prob
@@ -131,13 +149,14 @@ class Driver(object):
             if not noise_flag:
                 do_keep_prob = 1.
             
-            a = self.sess.run(fetches=[alg.action_test], feed_dict={alg.states: np.reshape(observation, [1, -1]),
+            a, a_probs = self.sess.run(fetches=[alg.action_test, alg.action_probs_test], feed_dict={alg.states: np.reshape(observation, [1, -1]),
                                                                     alg.do_keep_prob: do_keep_prob,
                                                                     alg.noise: noise_flag,
                                                                     alg.temp: self.env.temp})
+            # a_probs = common.compute_action_probs(a, a_means, self.env.sigma.reshape(1, -1))
 
             observation, reward, done, info = self.env.step(a, mode='python')
-            # done = done or t > n_steps
+            done = done or t > n_steps
             t += 1
             R += reward
 
@@ -147,7 +166,7 @@ class Driver(object):
                 else:
                     action = np.zeros((1, self.env.action_size))
                     action[0, a[0]] = 1
-                alg.er_agent.add(actions=action, rewards=[reward], next_states=[observation], terminals=[done])
+                alg.er_agent.add(actions=action, action_probs=a_probs, rewards=[reward], next_states=[observation], terminals=[done])
 
         return R
 
@@ -169,13 +188,16 @@ class Driver(object):
         else:
             self.train_forward_model()
 
-            self.mode = 'Prep'
-            if self.itr < self.env.prep_time:
+            if self.env.train_discriminator:
+                self.mode = 'Prep'
+            else:
+                self.mode = "AL"            
+            if self.env.train_discriminator and self.itr < self.env.prep_time:
                 self.train_discriminator()
             else:
                 self.mode = 'AL'
 
-                if self.discriminator_policy_switch:
+                if self.env.train_discriminator and self.discriminator_policy_switch:
                     self.train_discriminator()
                 else:
                     self.train_policy()
@@ -199,11 +221,15 @@ class Driver(object):
             buf = "processing iter: %d, loss(forward_model,discriminator,policy): %s" % (self.itr, self.loss)
         sys.stdout.write('\r' + buf)
 
-    def save_model(self, dir_name=None):
+    def save_model(self, dir_name=None, best=False, prefix=None):
         import os
         if dir_name is None:
             dir_name = self.run_dir + '/snapshots/'
         if not os.path.isdir(dir_name):
             os.mkdir(dir_name)
-        fname = dir_name + time.strftime("%Y-%m-%d-%H-%M-") + ('%0.6d.sn' % self.itr)
+        if not best:
+            fname = dir_name + time.strftime("%Y-%m-%d-%H-%M-") + ('%0.6d.sn' % self.itr)
+        else:
+            fname = dir_name + 'best/' + prefix + '-best'
+
         common.save_params(fname=fname, saver=self.saver, session=self.sess)

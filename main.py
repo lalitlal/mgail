@@ -12,16 +12,20 @@ def plotLoss(losses):
     plt.xlabel('Epochs')
     plt.ylabel('Loss')
 
-def plotReward(rewards):
+def plotReward(rewards, stds=None):
     plt.figure()
     plt.plot(rewards)
+    # if stds != None and len(stds) > 0:
+    #     plt.errorbar(list(range(len(rewards))), rewards, yerr=stds, ecolor='r')
     plt.xlabel('Epochs')
     plt.ylabel('Avg Reward')
 
-def dispatcher(env):
+def dispatcher(env, use_irl, env_name='Hopper'):
 
-    driver = Driver(env)
+    driver = Driver(env, use_irl)
     avg_rewards = []
+    reward_stds = []
+    best_reward = -np.inf
     if env.vis_flag:
         env.render()
 
@@ -43,29 +47,35 @@ def dispatcher(env):
             driver.reward_mean = sum(R) / len(R)
             driver.reward_std = np.std(R)
             avg_rewards.append(driver.reward_mean)
+            reward_stds.append(driver.reward_std)
 
             # print info line
             driver.print_info_line('full')
 
             # save snapshot
             if env.train_mode and env.save_models:
-                driver.save_model(dir_name=env.config_dir)
+                if driver.reward_mean > best_reward:
+                    driver.save_model(dir_name=env.config_dir, best=True, prefix=env_name)
+                    best_reward = driver.reward_mean
+
 
         driver.itr += 1
 
+    print('Top 3 Max Avg Rewards: ', np.sort(avg_rewards)[-3:])
     plotLoss(driver.policy_losses)
     plt.title("Policy Loss")
     plotLoss(driver.disc_losses)
     plt.title("Discriminator Loss")
     plotLoss(driver.forward_losses)
     plt.title("Forward Model Loss")
-    plotReward(avg_rewards)
-    plt.title("Hopper Average Rewards")
+    plotReward(avg_rewards, reward_stds)
+    plt.title(env_name + " Average Rewards")
     plt.show()
 
 if __name__ == '__main__':
     # load environment
-    env = Environment(os.path.curdir, 'AntPyBulletEnv-v0')
-
+    env_name = 'Ant' # options: Hopper, Ant, ...
+    env = Environment(os.path.curdir, env_name + 'PyBulletEnv-v0')
+    use_irl = True
     # start training
-    dispatcher(env=env)
+    dispatcher(env=env, use_irl=use_irl, env_name=env_name)

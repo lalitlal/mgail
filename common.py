@@ -62,8 +62,12 @@ def load_d4rl_er(h5path, batch_size, history_length, traj_length):
     # add back the terminal states
     flattened_post_states += terminal_post_states
     state_dim = flattened_states.shape[-1]
+
+    # get action_probs
+    action_probs = compute_action_probs(data_dict['actions'], data_dict['a_info/mean'], data_dict['a_info/log_std'])
+
     er = ER(data_size, state_dim, np.shape(data_dict['actions'])[1], batch_size, history_length)
-    er.add(data_dict["actions"], data_dict["rewards"], flattened_post_states, terminals)
+    er.add(data_dict["actions"], action_probs, data_dict["rewards"], flattened_post_states, terminals)
     er = set_er_stats(er, history_length, traj_length)
     return er
 
@@ -138,3 +142,39 @@ def gumbel_softmax(logits, temperature, hard=True):
         y_hard = tf.cast(tf.equal(y, tf.compat.v1.reduce_max(y, 1, keep_dims=True)), y.dtype)
         y = tf.stop_gradient(y_hard - y) + y
     return y
+
+def gauss_log_pdf(params, x):
+    mean, log_diag_std = params
+    x = x.reshape(1, -1)
+    mean = mean.reshape(1, -1)
+    log_diag_std = log_diag_std.reshape(1, -1)
+    N, d = mean.shape
+    cov =  np.square(np.exp(log_diag_std))
+    diff = x-mean
+    exp_term = -0.5 * np.sum(np.square(diff)/cov, axis=1)
+    norm_term = -0.5*d*np.log(2*np.pi)
+    var_term = -0.5 * np.sum(np.log(cov), axis=1)
+    log_probs = norm_term + var_term + exp_term
+    return log_probs #sp.stats.multivariate_normal.logpdf(x, mean=mean, cov=cov)
+
+def gauss_log_pdf_tf(means, log_diag_stds, x):
+    d = tf.cast(tf.shape(means)[1], dtype=tf.float32)
+    cov = tf.square(tf.exp(log_diag_stds))
+    diff = x - means
+    exp_term = -0.5 * tf.reduce_sum(tf.square(diff) / cov, axis=1)
+    norm_term = -0.5 * d * tf.math.log(2 * np.pi)
+    var_term = -0.5 * tf.reduce_sum(tf.math.log(cov), axis=1)
+    log_probs = norm_term + var_term + exp_term
+    return tf.reshape(log_probs, [-1, 1])
+
+def compute_action_probs(actions, means, stds):
+    # returns probability of actions given policy distribution params
+    Npath = len(actions)
+    params = list(zip(means, stds))
+    path_probs = [gauss_log_pdf(params[i], actions[i]) for i in range(Npath)]
+    return np.array(path_probs)
+
+def compute_action_probs_tf(actions, means, stds):
+    # returns probability of actions given policy distribution params
+    path_probs = gauss_log_pdf_tf(means, stds, actions)
+    return path_probs
