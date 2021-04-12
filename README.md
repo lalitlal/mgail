@@ -1,4 +1,4 @@
-## Model-Based Generative Adversarial Imitation Learning
+## Model-Based Generative Adversarial Inverse Reinforcement Learning
 
 Code for Paper "Model-Based Adversarial Inverse Reinforcement Learning", by Lalit Lal, Saad Saleem, Anson Leung.
 
